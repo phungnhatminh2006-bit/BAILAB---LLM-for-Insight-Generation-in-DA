@@ -101,7 +101,7 @@ where $𝛼∈[0,1]$ controls the trade-off between the two metrics $(default: �
 
 
 ## Limitation:
-- The pipeline requires multiple LLM calls (question generation, SQL generation, summarization, reflection), leading to increased cost and latency. This project choose free API tokens from Github, a free solution, but with trade-offs including rate limits, limited scalability, and potential instability in production environments.
+- The pipeline requires multiple LLM calls (question generation, SQL generation, summarization, reflection), leading to increased cost and latency. This project chooses free API tokens from Github, a free solution, but with trade-offs including rate limits, limited scalability, and potential instability in production environments.
 - Performance may degrade when handling complex or large databases due to schema size and context limitations.
 - Insight quality is measured using human judgment or preference-based ranking, making it difficult to standardize and reproduce.
 - Although mitigation mechanisms exist, some incorrect or unsupported claims may still remain in the final insights.
