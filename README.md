@@ -18,6 +18,9 @@ Instead of directly generating insights from data, the system follows a multi-st
 - Execute queries via an agent
 - Aggregate results into natural language insights
 
+## Output tracking and evaluation:
+https://docs.google.com/document/d/1Bl2Jz9xXa1u_JhdxNATJi5S_WN-Cgtn1mer8L0Gm8Es/edit?usp=sharing
+
 ## Architecture:
 
 <img width="1192" height="507" alt="image" src="https://github.com/user-attachments/assets/a6c72fca-a2f8-486d-95f9-07adcd717dec" />
@@ -83,8 +86,6 @@ O = \max \left( \frac{1}{\frac{\alpha}{\text{Insightfulness}} + \frac{1 - \alpha
 $$
 
 where $𝛼∈[0,1]$ controls the trade-off between the two metrics $(default: 𝛼=0.5)$
-
-
 
 ## Limitation:
 - The pipeline requires multiple LLM calls (question generation, SQL generation, summarization, reflection), leading to increased cost and latency. This project chooses free API tokens from Github, a free solution, but with trade-offs including rate limits, limited scalability, and potential instability in production environments.
