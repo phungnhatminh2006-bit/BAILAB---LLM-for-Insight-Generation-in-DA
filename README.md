@@ -57,21 +57,7 @@ LLM → Questions → SQL → Answers → Insight
 - Reflection loop: a sub-process within Summarization, with goal to refine the insight
 
 ## Project Structure
-```text
-.
-├── data/                  # Sample databases
-├── prompts/               # Prompt templates
-├── pipeline/
-│   ├── hypothesis.py
-│   ├── query_agent.py
-│   ├── summarizer.py
-│   └── reflection.py
-├── evaluation/
-│   ├── insightfulness.py
-│   └── correctness.py
-├── main.py
-└── README.md
-```
+
 
 ## Evaluation
 **1 - Correctness:**
