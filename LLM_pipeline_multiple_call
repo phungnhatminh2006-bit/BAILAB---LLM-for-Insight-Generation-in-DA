@@ -11,7 +11,7 @@ MODEL = "gpt-4o-mini"
 
 TEMPERATURE = 0.2 
 
-# 🔥 MULTI-PERSPECTIVE
+# MULTI-PERSPECTIVE
 MODES = [
     "focus on inequality between groups",
     "focus on interaction effects between variables",
@@ -316,7 +316,7 @@ def analyze_and_verify(df, question):
 
     sample = df.head(5).to_string(index=False)
 
-    for _ in range(2):   # 🔥 retry nhẹ
+    for _ in range(2): 
         prompt = f"""
 Data:
 {sample}
@@ -425,7 +425,7 @@ def generate_final_with_retry(main_q, insights, max_retry=2):
     return "Final insight uncertain. Insights: " + str(insights)
 
 # =========================================================
-# 🔥 MAIN PIPELINE (MULTI-INSIGHT)
+# MAIN PIPELINE (MULTI-INSIGHT)
 # =========================================================
 schema_text, dinfo_text = get_db_context(conn)
 

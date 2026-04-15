@@ -15,7 +15,7 @@ BOOTSTRAP_RUNS = 5
 
 TOTAL_CALLS = 0
 
-# 🔥 ADD: cache
+# ADD: cache
 COMPARE_CACHE = {}
 
 
@@ -39,7 +39,7 @@ def call_llm(prompt, max_tokens=50):
                 "max_tokens": max_tokens,
                 "temperature": 0.0
             },
-            timeout=10  # 🔥 FIX đơ
+            timeout=10 
         )
 
         if response.status_code == 200:
@@ -51,7 +51,7 @@ def call_llm(prompt, max_tokens=50):
 
 
 # =========================================================
-# 🔥 COMPARE (CACHED)
+# COMPARE (CACHED)
 # =========================================================
 def compare_insights_cached(a_id, b_id, insight_a, insight_b):
 
