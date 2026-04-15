@@ -1,0 +1,499 @@
+import sqlite3
+import pandas as pd
+import requests
+import time
+import json
+
+# ===== CONFIG =====
+GITHUB_TOKEN = "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"
+API_URL = "https://models.inference.ai.azure.com/chat/completions"
+MODEL = "gpt-4o-mini"
+
+TEMPERATURE = 0.2 
+
+# 🔥 MULTI-PERSPECTIVE
+MODES = [
+    "focus on inequality between groups",
+    "focus on interaction effects between variables",
+    "focus on anomalies or unexpected patterns"
+]
+
+# ===== LLM CALL =====
+def call_llm(prompt, max_tokens=200):
+    for _ in range(3):
+        try:
+            response = requests.post(
+                API_URL,
+                headers={
+                    "Authorization": f"Bearer {GITHUB_TOKEN}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": max_tokens,
+                    "temperature": TEMPERATURE
+                }
+            )
+
+            if response.status_code == 200:
+                return response.json()["choices"][0]["message"]["content"]
+            else:
+                time.sleep(1)
+        except:
+            time.sleep(1)
+
+    return ""
+
+
+# ===== DATABASE =====
+conn = sqlite3.connect("education_pro.db")
+
+# =========================================================
+# STEP 0 — DB UNDERSTANDING
+# =========================================================
+def get_db_context(conn):
+    cursor = conn.cursor()
+    tables = cursor.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()
+
+    schema_text = ""
+
+    for (t,) in tables:
+        schema_text += f"\n=== Table: {t} ===\n"
+
+        cols = cursor.execute(f"PRAGMA table_info({t});").fetchall()
+        for c in cols:
+            schema_text += f"- {c[1]} ({c[2]})\n"
+
+        rows = cursor.execute(f"SELECT * FROM {t} LIMIT 3;").fetchall()
+        schema_text += "\nSample rows:\n"
+        for r in rows:
+            schema_text += ", ".join([str(x) for x in r]) + "\n"
+
+    prompt = f"""
+You are a senior data analyst.
+
+Database schema:
+{schema_text}
+
+Your task is to extract ANALYTICAL STRUCTURE (not description).
+
+1. Identify VARIABLE GROUPS:
+- Socioeconomic variables
+- Performance variables
+- Resource / institutional variables
+
+2. Identify INTERACTION MECHANISMS:
+- How does X change under condition Y?
+- Where might effects differ across groups?
+
+3. Suggest 2–3 NON-OBVIOUS analytical directions:
+- Must involve interaction or heterogeneity
+- Avoid trivial relationships
+
+Rules:
+- DO NOT list columns
+- Focus on relationships and causal intuition
+- Be concise but analytical
+
+Output format:
+- Variables:
+- Interactions:
+- Directions:
+"""
+
+    description = call_llm(prompt, 150)
+
+    return schema_text, description
+
+# =========================================================
+# STEP 1 — HYPOTHESIS
+# =========================================================
+def generate_questions(context, mode):
+    prompt = f"""
+Context:
+{context}
+
+Focus:
+{mode}
+
+You are a senior data analyst designing high-quality analytical questions.
+
+Your goal is to generate questions that uncover DEEP STRUCTURAL INSIGHTS, not surface-level trends.
+
+
+Each question MUST:
+1. Combine AT LEAST TWO variables
+2. Capture INTERACTION EFFECTS (how X changes under condition Y)
+3. Include COMPARISON between groups / segments
+4. Reveal NON-OBVIOUS or counterintuitive patterns
+
+You MUST generate a question that is fundamentally DIFFERENT in reasoning style depending on the focus.
+Interpret the focus STRICTLY:
+• If focus = inequality between groups:
+  → Emphasize disparities, gaps, unequal outcomes
+  → Ask: which groups benefit more/less and under what conditions?
+  → Look for widening or narrowing gaps
+• If focus = interaction effects:
+  → Emphasize conditional relationships
+  → Ask: does the effect of X on Y change depending on Z?
+  → Focus on effect heterogeneity, not averages
+• If focus = anomalies or unexpected patterns:
+  → Emphasize contradictions, outliers, or breaks in expected trends
+  → Ask: where does the expected relationship FAIL?
+  → Look for groups that behave differently from the general pattern
+
+DO NOT:
+- Ask simple “X affects Y” questions
+- Describe general trends
+- Repeat patterns likely used in other modes
+- Ask questions answerable by a single average
+
+GOOD question characteristics:
+- Requires segmentation
+- Reveals hidden structure
+- Could lead to surprising findings
+
+
+MAIN: one high-level question reflecting the mode-specific reasoning
+SUB1: a sharper version focusing on interaction or segmentation
+SUB2: a contrast/anomaly-oriented variant that explores edge cases
+
+Before answering, ensure:
+- This question is NOT a generic trend question
+- This question is DISTINCT from other analytical perspectives
+- This question forces a multi-variable, conditional analysis
+"""
+
+    text = call_llm(prompt, 250)
+
+    main_q, sub_qs = None, []
+
+    for line in text.split("\n"):
+        line = line.strip()
+        if line.startswith("MAIN"):
+            main_q = line.split(":", 1)[-1].strip()
+        elif line.startswith("SUB"):
+            sub_qs.append(line.split(":", 1)[-1].strip())
+
+    if not main_q:
+        main_q = "What affects outcomes?"
+
+    if len(sub_qs) < 2:
+        sub_qs = [
+            "How does X change under Y?",
+            "Are there group differences?"
+        ]
+
+    return main_q, sub_qs[:1]
+
+
+# =========================================================
+# STEP 2 — SQL AGENT
+# =========================================================
+def generate_sql(q, schema_text):
+    prompt = f"""
+You are a SQL expert.
+
+Database schema:
+{schema_text}
+
+IMPORTANT:
+- ONLY use columns that exist
+- ONLY use tables in schema
+- Use correct JOIN keys
+
+Common joins:
+- students.student_id = performance.student_id
+- students.school_id = schools.school_id
+- schools.school_id = teachers.school_id
+- schools.school_id = school_resources.school_id
+
+STRICT RULES:
+1. MUST use JOIN
+2. MUST involve >= 2 tables
+3. MUST include GROUP BY
+4. MUST produce >= 2 groups
+5. NO incomplete clauses
+
+Return ONLY SQL.
+
+Question:
+{q}
+"""
+
+    text = call_llm(prompt, 200)
+
+    if "SELECT" in text:
+        sql = text[text.find("SELECT"):]
+        if ";" in sql:
+            sql = sql.split(";")[0] + ";"
+        return sql.strip()
+
+    return None
+
+def clean_sql(sql):
+    if sql is None:
+        return None
+
+    sql = sql.strip()
+
+    # remove incomplete WHERE
+    if sql.endswith("WHERE"):
+        sql = sql.replace("WHERE", "")
+
+    # fix double semicolon
+    sql = sql.replace(";;", ";")
+
+    # ensure semicolon at end
+    if not sql.endswith(";"):
+        sql += ";"
+
+    return sql
+
+
+def sql_agent(q):
+    sql = generate_sql(q, schema_text)
+    sql = clean_sql(sql)
+
+    if not sql:
+        return None, None
+
+    for i in range(2):   # low-cost: max 2
+        try:
+            print("\n[SQL TRY]:", sql)
+            df = pd.read_sql_query(sql, conn)
+            print("[SQL SUCCESS] Rows:", len(df))
+            if len(df) < 2:
+                return None, None
+
+            return sql, df
+
+        except Exception as e:
+            print("[SQL ERROR]:", e)
+
+            if i == 0:
+                sql = fix_sql_with_llm(sql, str(e), schema_text)
+                sql = clean_sql(sql)
+
+            else:
+                return None, None
+
+    return None, None
+            
+def fix_sql_with_llm(sql, error, schema_text):
+    prompt = f"""
+SQL query has error.
+
+SQL:
+{sql}
+
+Error:
+{error}
+
+Schema:
+{schema_text}
+
+Fix the SQL.
+
+Rules:
+- MUST use only existing columns
+- MUST use correct table aliases
+- MUST fix JOIN conditions
+- MUST return executable SQL
+
+Return ONLY SQL.
+"""
+    return call_llm(prompt, 150)
+
+
+# =========================================================
+# STEP 3 — ANALYZE + VERIFY
+# =========================================================
+def analyze_and_verify(df, question):
+    if df is None or df.empty:
+        return None
+
+    sample = df.head(5).to_string(index=False)
+
+    for _ in range(2):   # 🔥 retry nhẹ
+        prompt = f"""
+Data:
+{sample}
+
+Question:
+{question}
+
+You are an expert analyst.
+
+Tasks:
+1. Identify NON-OBVIOUS pattern
+2. Explain interaction (X changes under Y)
+3. Include numerical difference
+4. Explain implication
+
+Rules:
+- Max 2 sentences
+- Avoid obvious statements
+
+Output:
+INSIGHT: ...
+VALID: YES or NO
+"""
+
+        text = call_llm(prompt, 150)
+
+        if "YES" in text.upper() and "INSIGHT:" in text:
+            return text.strip()
+
+    return None
+
+# =========================================================
+# STEP 4 — FINAL SYNTHESIS
+# =========================================================
+def generate_final_with_retry(main_q, insights, max_retry=2):
+
+    if not insights:
+        return "No strong evidence found from the data."
+
+    feedback = ""
+
+    for i in range(max_retry):
+
+        prompt = f"""
+        Main question:
+        {main_q}
+
+        Verified insights:
+        {insights}
+
+        Previous issue:
+        {feedback}
+
+        You are a senior data analyst.
+
+        Generate ONE final insight that MUST:
+        1. Combine multiple findings into a deeper conclusion
+        2. Include a comparison (between groups or conditions)
+        3. Include an implication (why this matters)
+        4. Be non-obvious and analytical
+
+        Rules:
+        - ONLY use given insights
+        - DO NOT introduce new claims
+        - If evidence is limited, state limitation clearly
+        - Maximum 2 sentences
+        - Avoid obvious or trivial insights.
+        - Include quantitative evidence when possible
+
+        Bad example:
+        "X increases when Y increases."
+
+        Good example:
+        "While X is generally higher when Y increases, the effect is significantly stronger in group A than group B, suggesting structural differences."
+
+        Final insight:
+        """
+
+        final = call_llm(prompt, 200)
+        print("\n[FINAL CANDIDATE]:", final)
+
+        # verify final
+        check_prompt = f"""
+        Final insight:
+        {final}
+
+        Source insights:
+        {insights}
+
+        Check:
+        - Any new claim not in source?
+        - Fully supported?
+
+        Return ONLY VALID or INVALID
+        """
+
+        result = call_llm(check_prompt, 100)
+        print("[FINAL CHECK]:", result)
+
+        if "VALID" in result.upper():
+            return final
+
+        feedback = "Previous summary introduced unsupported claims."
+        print(f"Retry summarization... ({i+1})")
+
+    return "Final insight uncertain. Insights: " + str(insights)
+
+# =========================================================
+# 🔥 MAIN PIPELINE (MULTI-INSIGHT)
+# =========================================================
+schema_text, dinfo_text = get_db_context(conn)
+
+all_final_insights = []
+all_runs = []
+
+for i, mode in enumerate(MODES):
+
+    print(f"\n=== RUN {i+1} | {mode} ===")
+
+    main_q, sub_qs = generate_questions(dinfo_text, mode)
+
+    valid_insights = []
+
+    for q in sub_qs:
+        print("\n[QUESTION]:", q)
+
+        sql, df = sql_agent(q)
+
+        if df is None:
+            continue
+
+        result = analyze_and_verify(df, q)
+
+        if result:
+            print("[VALID INSIGHT]:", result)
+            valid_insights.append(result)
+            break
+
+    if not valid_insights:
+        print("\n[FALLBACK] using main question")
+
+        sql, df = sql_agent(main_q)
+
+        if df is not None:
+            result = analyze_and_verify(df, main_q)
+
+            if result:
+                print("[FALLBACK INSIGHT]:", result)
+                valid_insights.append(result)
+
+    final = generate_final_with_retry(main_q, valid_insights)
+
+    if final and final.strip() and "No strong evidence" not in final:
+        clean_final = final.strip().strip('"')
+        all_final_insights.append({
+            "id": f"run_{i}",
+            "mode": mode,
+            "insight": clean_final
+        })
+        
+
+# =========================================================
+# OUTPUT
+# =========================================================
+output_data = {
+    "candidates": all_final_insights,
+    "all_runs": all_runs,
+    "metadata": {
+        "num_runs": len(MODES),
+        "num_unique_insights": len(all_final_insights),
+        "model": MODEL
+    }
+}
+
+with open("pipeline_output_multi.json", "w", encoding="utf-8") as f:
+    json.dump(output_data, f, indent=4, ensure_ascii=False)
+
+print("\n=== FINAL INSIGHTS ===")
+for i, ins in enumerate(all_final_insights):
+    print(f"{i+1}. {ins}")

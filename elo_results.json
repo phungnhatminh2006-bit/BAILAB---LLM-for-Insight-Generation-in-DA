@@ -1,0 +1,42 @@
+{
+    "elo_summary": {
+        "run_0": {
+            "mean": 992.58,
+            "std": 20.1
+        },
+        "run_1": {
+            "mean": 997.86,
+            "std": 33.03
+        },
+        "run_2": {
+            "mean": 1009.56,
+            "std": 16.05
+        }
+    },
+    "correctness": {
+        "run_0": 1,
+        "run_1": 0.7,
+        "run_2": 1
+    },
+    "ranking": [
+        {
+            "id": "run_2",
+            "elo_mean": 1009.56,
+            "elo_std": 16.05,
+            "correctness": 1
+        },
+        {
+            "id": "run_1",
+            "elo_mean": 997.86,
+            "elo_std": 33.03,
+            "correctness": 0.7
+        },
+        {
+            "id": "run_0",
+            "elo_mean": 992.58,
+            "elo_std": 20.1,
+            "correctness": 1
+        }
+    ],
+    "total_calls": 6
+}
