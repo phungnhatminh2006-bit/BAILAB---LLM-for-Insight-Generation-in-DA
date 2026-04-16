@@ -18,9 +18,6 @@ Instead of directly generating insights from data, the system follows a multi-st
 - Execute queries via an agent
 - Aggregate results into natural language insights
 
-## Output tracking and evaluation:
-https://docs.google.com/document/d/1Bl2Jz9xXa1u_JhdxNATJi5S_WN-Cgtn1mer8L0Gm8Es/edit?usp=sharing
-
 ## Architecture:
 
 <img width="1192" height="507" alt="image" src="https://github.com/user-attachments/assets/a6c72fca-a2f8-486d-95f9-07adcd717dec" />
